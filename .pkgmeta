@@ -1,0 +1,11 @@
+package-as: BigSoulstone
+enable-nolib-creation: no
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+ignore:
+  - .gitignore
+  - .pkgmeta
+  - README.md
+  - logo.png
+  - .claude
