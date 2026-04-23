@@ -1,11 +1,14 @@
-package-as: BigSoulstone
+package-as: BigSoulstoneReminder
 enable-nolib-creation: no
 manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
 ignore:
+  - AGENTS.md
+  - CLAUDE.md
   - .gitignore
   - .pkgmeta
   - README.md
   - logo.png
   - .claude
+  - scripts

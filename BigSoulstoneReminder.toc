@@ -1,0 +1,10 @@
+## Interface: 120005
+## Title: Big Soulstone Reminder
+## Notes: A simple Soulstone reminder for Warlocks.
+## Author: Codecrete
+## Version: @project-version@
+## Category-enUS: Raid
+## IconTexture: Interface\AddOns\BigSoulstoneReminder\logo
+## SavedVariables: BigSoulstoneReminderDB
+
+BigSoulstoneReminder.lua

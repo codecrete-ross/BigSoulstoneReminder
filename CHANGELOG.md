@@ -1,9 +1,10 @@
 ## 1.0.0
 
 - Initial release
-- Standalone Warlock-only Soulstone reminder
-- Proof-only clearing: the reminder hides only when the addon can prove the active Soulstone was cast by the local player
-- Solo support: Soulstone on yourself clears the banner
-- Group support: Soulstone on a current party or raid member clears the banner only when `sourceUnit` resolves to the local player
-- Restriction-aware aura scanning using modern `C_UnitAuras` APIs
-- Compact upper-center reminder banner with no setup, chat spam, or external dependencies
+- Soulstone reminder for Warlocks
+- The reminder stays up until your Soulstone is active on you or a group member
+- Works while solo and in groups
+- "Ready Soon" countdown when Soulstone is about to come off cooldown
+- Settings for solo play, group play, open-world groups, banner position and size, and countdown timing
+- Preview options in settings and extra chat details
+- Compact on-screen banner

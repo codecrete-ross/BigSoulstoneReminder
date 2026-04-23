@@ -1,21 +1,27 @@
-# BigSoulstone
+# Big Soulstone Reminder
 
-Proof-only Soulstone reminder for World of Warcraft Retail Warlocks.
+![Big Soulstone Reminder](logo.png)
+
+A simple Soulstone reminder for Warlocks.
 
 ## Features
 
-- Self-only reminder with no setup or slash commands
-- Clears only when the addon can prove **your** Soulstone is active on yourself or a current group member
-- Restriction-aware: stops scanning while aura data is secret and refreshes again when it becomes available
-- Standalone and lightweight, with no external dependencies
+- Open settings with `/bsr`
+- Shows a reminder when Soulstone is missing
+- The reminder goes away when your Soulstone is active on you or a group member
+- Choose whether the reminder appears while solo, in groups, or in open-world groups
+- Choose when "Ready Soon" appears and where the banner sits on screen
+- Preview the banner from the settings panel
+- Standalone and lightweight
 
 ## How To Use
 
 1. Install the addon and log onto a Warlock
-2. While solo, the reminder clears only when **you** have Soulstone on yourself
-3. While grouped in an instance, the reminder clears only when the addon can prove **your** Soulstone is on a current party or raid member
-4. If Soulstone cannot be proven, the banner stays visible rather than assuming coverage
+2. Type `/bsr` to open the settings panel
+3. While solo, put Soulstone on yourself to make the reminder go away
+4. While grouped, put Soulstone on a current party or raid member to make the reminder go away
+5. Turn on open-world group reminders in settings if you want it outside instances
 
 ## Install
 
-Install via CurseForge once published, or copy the `BigSoulstone` folder into your `Interface/AddOns/` directory.
+Install via CurseForge, or copy the `BigSoulstoneReminder` folder into your `Interface/AddOns/` directory.

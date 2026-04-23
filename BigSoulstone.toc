@@ -1,9 +1,0 @@
-## Interface: 120005
-## Title: BigSoulstone
-## Notes: Proof-only Soulstone reminder for Warlocks with no external dependencies.
-## Author: Codecrete
-## Version: @project-version@
-## Category-enUS: Raid
-## IconTexture: Interface\Icons\Spell_Shadow_SoulGem
-
-BigSoulstone.lua
