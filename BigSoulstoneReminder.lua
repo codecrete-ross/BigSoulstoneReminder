@@ -18,7 +18,8 @@ local DEFAULT_BANNER_POSITION = {
 
 local DEFAULT_SETTINGS = {
     enableSoloReminder = true,
-    enableGroupReminder = true,
+    enablePartyReminder = true,
+    enableRaidReminder = true,
     allowGroupReminderOutsideInstances = false,
     soonThreshold = 30,
     unlockBannerPosition = false,
@@ -79,6 +80,24 @@ local function MergeDefaults(target, defaults)
             end
         elseif target[key] == nil then
             target[key] = value
+        end
+    end
+end
+
+local function MigrateSettings(settings)
+    if type(settings) ~= "table" then
+        return
+    end
+
+    if settings.enableGroupReminder ~= nil then
+        local groupReminderEnabled = settings.enableGroupReminder and true or false
+
+        if settings.enablePartyReminder == nil then
+            settings.enablePartyReminder = groupReminderEnabled
+        end
+
+        if settings.enableRaidReminder == nil then
+            settings.enableRaidReminder = groupReminderEnabled
         end
     end
 end
@@ -220,7 +239,14 @@ local function IsGroupedContextEligible()
         return GetSetting("enableSoloReminder")
     end
 
-    if not GetSetting("enableGroupReminder") then
+    local groupReminderEnabled
+    if IsInRaid() then
+        groupReminderEnabled = GetSetting("enableRaidReminder")
+    else
+        groupReminderEnabled = GetSetting("enablePartyReminder")
+    end
+
+    if not groupReminderEnabled then
         return false
     end
 
@@ -904,8 +930,8 @@ local function CreateSettingsPanel()
     description:SetText("A simple Soulstone reminder.")
 
     CreateSectionHeader(content, 18, -78, "Behavior", "Choose when the reminder shows up and when \"Ready Soon\" starts.")
-    CreateSectionHeader(content, 18, -292, "Appearance", "Move the banner and change its size.")
-    CreateSectionHeader(content, 18, -496, "Testing", "Preview the banner and turn on extra chat details.")
+    CreateSectionHeader(content, 18, -318, "Appearance", "Move the banner and change its size.")
+    CreateSectionHeader(content, 18, -522, "Testing", "Preview the banner and turn on extra chat details.")
 
     CreateSettingsCheckbox(content, 14, -122, "Show While Solo", function()
         return GetSetting("enableSoloReminder")
@@ -914,21 +940,28 @@ local function CreateSettingsPanel()
         QueueRefresh("setting:solo")
     end)
 
-    CreateSettingsCheckbox(content, 14, -148, "Show In Groups", function()
-        return GetSetting("enableGroupReminder")
+    CreateSettingsCheckbox(content, 14, -148, "Show In Party", function()
+        return GetSetting("enablePartyReminder")
     end, function(value)
-        SetSetting("enableGroupReminder", value)
-        QueueRefresh("setting:group")
+        SetSetting("enablePartyReminder", value)
+        QueueRefresh("setting:party")
     end)
 
-    CreateSettingsCheckbox(content, 14, -174, "Show In Open-World Groups", function()
+    CreateSettingsCheckbox(content, 14, -174, "Show In Raid", function()
+        return GetSetting("enableRaidReminder")
+    end, function(value)
+        SetSetting("enableRaidReminder", value)
+        QueueRefresh("setting:raid")
+    end)
+
+    CreateSettingsCheckbox(content, 14, -200, "Show In Open-World Groups", function()
         return GetSetting("allowGroupReminderOutsideInstances")
     end, function(value)
         SetSetting("allowGroupReminderOutsideInstances", value)
         QueueRefresh("setting:open-world")
     end)
 
-    CreateSettingsSlider(content, "SoonThresholdSlider", 24, -226, "Show \"Ready Soon\" At", 10, 60, 1, function(value)
+    CreateSettingsSlider(content, "SoonThresholdSlider", 24, -252, "Show \"Ready Soon\" At", 10, 60, 1, function(value)
         return string.format("%ds", value)
     end, function()
         return GetSoonThreshold()
@@ -937,19 +970,19 @@ local function CreateSettingsPanel()
         QueueRefresh("setting:soon-threshold")
     end)
 
-    CreateSettingsCheckbox(content, 14, -336, "Move Banner", function()
+    CreateSettingsCheckbox(content, 14, -362, "Move Banner", function()
         return GetSetting("unlockBannerPosition")
     end, function(value)
         SetSetting("unlockBannerPosition", value)
         ApplyBannerUnlockState()
     end)
 
-    CreateSettingsButton(content, 42, -372, 220, "Reset Banner Position", function()
+    CreateSettingsButton(content, 42, -398, 220, "Reset Banner Position", function()
         ResetBannerPosition()
         RefreshSettingsPanel()
     end)
 
-    CreateSettingsSlider(content, "BannerScaleSlider", 24, -434, "Banner Size", 0.8, 1.5, 0.05, function(value)
+    CreateSettingsSlider(content, "BannerScaleSlider", 24, -460, "Banner Size", 0.8, 1.5, 0.05, function(value)
         return string.format("%d%%", math.floor((value * 100) + 0.5))
     end, function()
         return GetSetting("bannerScale")
@@ -959,26 +992,26 @@ local function CreateSettingsPanel()
         ApplyBannerPosition()
     end)
 
-    CreateSettingsCheckbox(content, 14, -540, "Extra Chat Details", function()
+    CreateSettingsCheckbox(content, 14, -566, "Extra Chat Details", function()
         return GetSetting("debugLogging")
     end, function(value)
         SetSetting("debugLogging", value)
         state.debugEnabled = value
     end)
 
-    CreateSettingsButton(content, 42, -576, 220, "Preview \"Missing\"", function()
+    CreateSettingsButton(content, 42, -602, 220, "Preview \"Missing\"", function()
         SetDemoMode("missing", nil, true)
     end)
 
-    CreateSettingsButton(content, 42, -610, 220, "Preview \"Ready Soon\"", function()
+    CreateSettingsButton(content, 42, -636, 220, "Preview \"Ready Soon\"", function()
         SetDemoMode("soon", 15, true)
     end)
 
-    CreateSettingsButton(content, 42, -644, 220, "Stop Preview", function()
+    CreateSettingsButton(content, 42, -670, 220, "Stop Preview", function()
         SetDemoMode(nil, nil, true)
     end)
 
-    CreateSettingsButton(content, 42, -696, 220, "Reset Settings", function()
+    CreateSettingsButton(content, 42, -722, 220, "Reset Settings", function()
         BigSoulstoneReminderDB = CloneValue(DEFAULT_SETTINGS)
         state.debugEnabled = BigSoulstoneReminderDB.debugLogging
         SetDemoMode(nil, nil, true)
@@ -1154,6 +1187,7 @@ local function InitializeAddon()
         BigSoulstoneReminderDB = {}
     end
 
+    MigrateSettings(BigSoulstoneReminderDB)
     MergeDefaults(BigSoulstoneReminderDB, DEFAULT_SETTINGS)
     state.debugEnabled = BigSoulstoneReminderDB.debugLogging
 

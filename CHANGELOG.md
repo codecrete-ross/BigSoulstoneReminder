@@ -1,3 +1,9 @@
+## 1.1.0
+
+- Added separate "Show In Party" and "Show In Raid" settings
+- Existing "Show In Groups" preferences carry over to both new settings
+- Open-world group reminders still apply to both parties and raids
+
 ## 1.0.0
 
 - Initial release
