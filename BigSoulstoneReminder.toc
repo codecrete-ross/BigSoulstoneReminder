@@ -1,4 +1,5 @@
-## Interface: 120005
+## Interface: 120105, 16001
+## AllowLoadGameType: standard, camelot
 ## Title: Big Soulstone Reminder
 ## Notes: A simple Soulstone reminder for Warlocks.
 ## Author: Codecrete

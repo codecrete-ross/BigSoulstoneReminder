@@ -2,7 +2,17 @@ local addonName = ...
 
 local ADDON = CreateFrame("Frame")
 
+local IS_FOREVER = WOW_PROJECT_CAMELOT ~= nil and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
 local SOULSTONE_SPELL_ID = 20707
+local FOREVER_SOULSTONE_ITEM_ID = 16893
+-- On Forever, each stone's item-use spell also identifies its applied aura.
+local FOREVER_SOULSTONE_RANKS = {
+    [20707] = { createSpellID = 693, itemID = 5232 },
+    [20762] = { createSpellID = 20752, itemID = 16892 },
+    [20763] = { createSpellID = 20755, itemID = FOREVER_SOULSTONE_ITEM_ID },
+    [20764] = { createSpellID = 20756, itemID = 16895 },
+    [20765] = { createSpellID = 20757, itemID = 16896 },
+}
 local SOULSTONE_FALLBACK_ICON = 136210
 local ICON_SIZE = 36
 local TITLE_FONT_SIZE = 21
@@ -36,7 +46,6 @@ local DEFAULT_SETTINGS = {
 local state = {
     initialized = false,
     refreshPending = false,
-    wasRestricted = false,
     debugEnabled = false,
     demoMode = nil,
     demoDeadline = nil,
@@ -141,48 +150,72 @@ local function GetSoonThreshold()
     return GetSetting("soonThreshold") or DEFAULT_SETTINGS.soonThreshold
 end
 
+local function IsReadable(value)
+    return not issecretvalue or not issecretvalue(value)
+end
+
+local function IsReadableTable(value)
+    return IsReadable(value) and type(value) == "table" and (not canaccesstable or canaccesstable(value))
+end
+
+local function IsRestricted()
+    return C_Secrets.ShouldAurasBeSecret()
+end
+
 local function GetSoulstoneInfo()
-    if C_Spell and C_Spell.GetSpellInfo then
-        local info = C_Spell.GetSpellInfo(SOULSTONE_SPELL_ID)
-        if type(info) == "table" then
-            return info.name or "Soulstone", info.iconID or info.originalIconID or SOULSTONE_FALLBACK_ICON
-        end
+    if IS_FOREVER then
+        return C_Item.GetItemNameByID(FOREVER_SOULSTONE_ITEM_ID) or "Soulstone", SOULSTONE_FALLBACK_ICON
     end
 
-    if GetSpellInfo then
-        local name, _, icon = GetSpellInfo(SOULSTONE_SPELL_ID)
-        return name or "Soulstone", icon or SOULSTONE_FALLBACK_ICON
+    local info = C_Spell.GetSpellInfo(SOULSTONE_SPELL_ID)
+    if info then
+        return info.name or "Soulstone", info.iconID or info.originalIconID or SOULSTONE_FALLBACK_ICON
     end
 
     return "Soulstone", SOULSTONE_FALLBACK_ICON
 end
 
+local function GetRemainingTime(startTime, duration)
+    if not IsReadable(startTime) or not IsReadable(duration) then
+        return nil
+    end
+
+    if not startTime or not duration or startTime <= 0 or duration <= 0 then
+        return 0
+    end
+
+    return math.max(0, startTime + duration - GetTime())
+end
+
 local function GetCooldownRemaining()
-    if C_Spell and C_Spell.GetSpellCooldown then
-        local cooldown = C_Spell.GetSpellCooldown(SOULSTONE_SPELL_ID)
-        if type(cooldown) == "table" then
-            local duration = cooldown.duration or 0
-            local startTime = cooldown.startTime or 0
-
-            if duration <= 0 or startTime <= 0 then
-                return 0
+    if IS_FOREVER then
+        local remaining = 0
+        -- Query by item ID even when using the last stone removed it from the bags.
+        for _, rank in pairs(FOREVER_SOULSTONE_RANKS) do
+            local startTime, duration = C_Item.GetItemCooldown(rank.itemID)
+            local rankRemaining = GetRemainingTime(startTime, duration)
+            if rankRemaining == nil then
+                return nil
             end
-
-            return math.max(0, (startTime + duration) - GetTime())
+            remaining = math.max(remaining, rankRemaining)
         end
+        return remaining
     end
 
-    if GetSpellCooldown then
-        local startTime, duration = GetSpellCooldown(SOULSTONE_SPELL_ID)
-
-        if not startTime or not duration or duration <= 0 or startTime <= 0 then
-            return 0
-        end
-
-        return math.max(0, (startTime + duration) - GetTime())
+    if C_Secrets.ShouldSpellCooldownBeSecret(SOULSTONE_SPELL_ID) then
+        return nil
     end
 
-    return 0
+    local cooldown = C_Spell.GetSpellCooldown(SOULSTONE_SPELL_ID)
+    if IsReadable(cooldown) and cooldown == nil then
+        return 0
+    end
+
+    if not IsReadableTable(cooldown) then
+        return nil
+    end
+
+    return GetRemainingTime(cooldown.startTime, cooldown.duration)
 end
 
 local function GetDemoCooldownRemaining()
@@ -198,6 +231,10 @@ local function GetStatusCooldownRemaining()
         return GetDemoCooldownRemaining()
     end
 
+    if IsRestricted() then
+        return nil
+    end
+
     return GetCooldownRemaining()
 end
 
@@ -208,23 +245,32 @@ local function CancelCooldownTimer()
     end
 end
 
-local function IsCastingSoulstone()
-    local _, _, _, _, _, _, _, _, spellID = UnitCastingInfo("player")
-    if spellID == SOULSTONE_SPELL_ID then
-        return true
+local function IsSoulstoneApplication(spellID)
+    if not IsReadable(spellID) then
+        return false
     end
 
-    local _, _, _, _, _, _, _, _, channelSpellID = UnitChannelInfo("player")
-    return channelSpellID == SOULSTONE_SPELL_ID
+    if IS_FOREVER then
+        return FOREVER_SOULSTONE_RANKS[spellID] ~= nil
+    end
+
+    return spellID == SOULSTONE_SPELL_ID
+end
+
+local function IsCastingSoulstone()
+    local spellID = select(9, UnitCastingInfo("player"))
+    return IsSoulstoneApplication(spellID)
 end
 
 local function KnowsSoulstone()
-    if C_SpellBook and C_SpellBook.IsSpellKnownOrInSpellBook then
-        return C_SpellBook.IsSpellKnownOrInSpellBook(SOULSTONE_SPELL_ID, nil, true)
+    if not IS_FOREVER then
+        return C_SpellBook.IsSpellKnownOrInSpellBook(SOULSTONE_SPELL_ID)
     end
 
-    if IsPlayerSpell then
-        return IsPlayerSpell(SOULSTONE_SPELL_ID)
+    for _, rank in pairs(FOREVER_SOULSTONE_RANKS) do
+        if C_SpellBook.IsSpellKnownOrInSpellBook(rank.createSpellID) then
+            return true
+        end
     end
 
     return false
@@ -261,114 +307,70 @@ local function IsEligible()
     return IsWarlock() and KnowsSoulstone() and IsGroupedContextEligible()
 end
 
-local function IsRestricted()
-    return C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret() or false
-end
-
 local function IsRelevantUnitToken(unit)
-    if unit == "player" then
-        return true
-    end
-
-    if type(unit) ~= "string" then
+    if not IsReadable(unit) or type(unit) ~= "string" then
         return false
     end
 
-    return unit:match("^party%d+$") ~= nil or unit:match("^raid%d+$") ~= nil
+    return unit == "player" or unit:match("^party%d+$") ~= nil or unit:match("^raid%d+$") ~= nil
 end
 
 local function GetUnitLabel(unit)
     local name = UnitName(unit)
-    if not name or name == "" then
+    if not IsReadable(name) or not name or name == "" then
         return unit
     end
 
     return string.format("%s (%s)", name, unit)
 end
 
-local function ForEachRelevantUnit(callback)
-    if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do
-            local unit = "raid" .. i
-
-            if UnitExists(unit) and callback(unit) then
-                return true
-            end
-        end
-
+local function IsPlayerSource(sourceUnit)
+    if not IsReadable(sourceUnit) or not sourceUnit then
         return false
     end
 
-    if IsInGroup() then
-        if UnitExists("player") and callback("player") then
-            return true
-        end
-
-        for i = 1, GetNumSubgroupMembers() do
-            local unit = "party" .. i
-
-            if UnitExists(unit) and callback(unit) then
-                return true
-            end
-        end
-
+    if not UnitExists(sourceUnit) or not C_Secrets.CanCompareUnitTokens(sourceUnit, "player") then
         return false
     end
 
-    return UnitExists("player") and callback("player") or false
-end
-
-local function GetSoulstoneAura(unit)
-    if unit == "player" and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        local aura = C_UnitAuras.GetPlayerAuraBySpellID(SOULSTONE_SPELL_ID)
-        if aura then
-            return aura
-        end
-    end
-
-    if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID then
-        local aura = C_UnitAuras.GetUnitAuraBySpellID(unit, SOULSTONE_SPELL_ID)
-        if aura then
-            return aura
-        end
-    end
-
-    if C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
-        local spellName = GetSoulstoneInfo()
-        if spellName then
-            return C_UnitAuras.GetAuraDataBySpellName(unit, spellName, "HELPFUL")
-        end
-    end
-
-    return nil
+    local isPlayer = UnitIsUnit(sourceUnit, "player")
+    return IsReadable(isPlayer) and isPlayer == true
 end
 
 local function HasOwnedSoulstone(unit)
-    local aura = GetSoulstoneAura(unit)
-    if not aura or not aura.sourceUnit then
+    if not UnitIsVisible(unit) then
         return false
     end
 
-    if not UnitExists(aura.sourceUnit) then
-        return false
-    end
+    local index = 1
+    while true do
+        local aura = C_UnitAuras.GetAuraDataByIndex(unit, index, "HELPFUL|PLAYER")
+        if IsReadable(aura) and aura == nil then
+            return false
+        end
 
-    return UnitIsUnit(aura.sourceUnit, "player")
-end
-
-local function FindOwnedSoulstoneUnit()
-    local ownedUnit
-
-    ForEachRelevantUnit(function(unit)
-        if HasOwnedSoulstone(unit) then
-            ownedUnit = unit
+        if IsReadableTable(aura) and IsSoulstoneApplication(aura.spellId) and IsPlayerSource(aura.sourceUnit) then
             return true
         end
 
-        return false
-    end)
+        index = index + 1
+    end
+end
 
-    return ownedUnit
+local function FindOwnedSoulstoneUnit()
+    if HasOwnedSoulstone("player") then
+        return "player"
+    end
+
+    local inRaid = IsInRaid()
+    local prefix = inRaid and "raid" or "party"
+    local count = inRaid and GetNumGroupMembers() or GetNumSubgroupMembers()
+    for i = 1, count do
+        local unit = prefix .. i
+        if HasOwnedSoulstone(unit) then
+            return unit
+        end
+    end
 end
 
 local function SaveBannerPosition()
@@ -553,24 +555,23 @@ local function ApplyDemoMode()
     return false
 end
 
+local function PauseReminder()
+    CancelCooldownTimer()
+    state.lastReason = "Waiting for the game to show Soulstone details"
+    state.lastOwnedUnit = nil
+    DebugState()
+end
+
 local function RefreshState()
     if ApplyDemoMode() then
         DebugState()
         return
     end
 
-    local restricted = IsRestricted()
-
-    if restricted then
-        CancelCooldownTimer()
-        state.wasRestricted = true
-        state.lastReason = "Waiting for the game to show Soulstone details"
-        state.lastOwnedUnit = nil
-        DebugState()
+    if IsRestricted() then
+        PauseReminder()
         return
     end
-
-    state.wasRestricted = false
 
     if not IsEligible() then
         CancelCooldownTimer()
@@ -601,6 +602,11 @@ local function RefreshState()
     end
 
     local cooldownRemaining = GetCooldownRemaining()
+    if cooldownRemaining == nil then
+        PauseReminder()
+        return
+    end
+
     local soonThreshold = GetSoonThreshold()
 
     state.lastOwnedUnit = nil
@@ -1051,6 +1057,7 @@ local function PrintHelp()
 end
 
 local function PrintStatus()
+    RefreshState()
     local cooldownRemaining = GetStatusCooldownRemaining()
     local eligible = IsEligible()
     local previewLabel = GetPreviewLabel(state.demoMode)
@@ -1058,7 +1065,11 @@ local function PrintStatus()
     Chat(string.format("Preview: %s", previewLabel))
     Chat(string.format("Reminder active here: %s", eligible and "Yes" or "No"))
     Chat(string.format("Banner visible: %s", (banner and banner:IsShown()) and "Yes" or "No"))
-    Chat(string.format("Soulstone cooldown: %ds", math.ceil(cooldownRemaining)))
+    if cooldownRemaining == nil then
+        Chat("Soulstone cooldown: Unavailable")
+    else
+        Chat(string.format("Soulstone cooldown: %ds", math.ceil(cooldownRemaining)))
+    end
     Chat(string.format("\"Ready Soon\" starts at: %ds", GetSoonThreshold()))
     Chat(string.format("Current state: %s", state.lastReason))
 end
@@ -1180,6 +1191,17 @@ local function RegisterRuntimeEvents()
     ADDON:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     ADDON:RegisterEvent("PLAYER_REGEN_DISABLED")
     ADDON:RegisterEvent("PLAYER_REGEN_ENABLED")
+    ADDON:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+
+    if IS_FOREVER then
+        ADDON:RegisterEvent("BAG_UPDATE_COOLDOWN")
+        ADDON:RegisterEvent("BAG_UPDATE_DELAYED")
+        ADDON:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+
+        for _, rank in pairs(FOREVER_SOULSTONE_RANKS) do
+            C_Item.RequestLoadItemDataByID(rank.itemID)
+        end
+    end
 end
 
 local function InitializeAddon()
@@ -1223,11 +1245,24 @@ ADDON:SetScript("OnEvent", function(_, event, ...)
 
     if event:match("^UNIT_SPELLCAST_") then
         local unit, _, spellID = ...
-        if unit ~= "player" or spellID ~= SOULSTONE_SPELL_ID then
+        if not IsReadable(unit) or unit ~= "player" or not IsSoulstoneApplication(spellID) then
             return
         end
 
         QueueRefresh(string.format("%s:%s", event, spellID))
+        return
+    end
+
+    if event == "ITEM_DATA_LOAD_RESULT" then
+        local itemID, success = ...
+        if success then
+            for _, rank in pairs(FOREVER_SOULSTONE_RANKS) do
+                if rank.itemID == itemID then
+                    QueueRefresh(event)
+                    break
+                end
+            end
+        end
         return
     end
 
