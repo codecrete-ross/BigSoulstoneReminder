@@ -1,3 +1,4 @@
 .release/
 .claude/
-scripts/
+scripts/*
+!scripts/deploy.ps1

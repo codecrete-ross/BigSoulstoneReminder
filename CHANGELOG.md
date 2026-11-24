@@ -1,3 +1,8 @@
+## 1.2.0
+
+- Added WoW Forever support for all five Soulstone ranks, including the resurrection buff and item cooldown
+- Updated the Retail interface version to 12.1.5
+
 ## 1.1.0
 
 - Added separate "Show In Party" and "Show In Raid" settings
